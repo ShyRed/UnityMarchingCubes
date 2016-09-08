@@ -16,14 +16,20 @@ public class CaveGenerator : DistancefieldGenerator {
     /// <returns>The value at the specified position.</returns>
     public override float GenerateValue(float x, float y, float z)
     {
-        x %= 10;
-        z %= 10;
+        float origX = x;
+        float origZ = z;
+
+        x %= 15;
+        z %= 15;
 
         x -= 5;
         z -= 5;
 
         return y
             * ((x * x + y * y + z * z) - 12)
-            * (y * 0.2f + (x * x + z * z) - 3);
+            * (y * 0.2f + (x * x + z * z) - 3)
+            * (Mathf.PerlinNoise(origX * 0.1f, origZ * 0.1f + y) - 0.2f)
+            * (Mathf.PerlinNoise(origX * 0.1f, y * 0.1f) - 0.2f)
+            * (Mathf.PerlinNoise(origZ * 0.1f, y * 0.1f) - 0.2f);
     }
 }

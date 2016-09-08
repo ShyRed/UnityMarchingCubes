@@ -10,13 +10,22 @@ using System.Collections;
 /// Implementation based on http://stemkoski.github.io/Three.js/Marching-Cubes.html /
 /// https://github.com/stemkoski/three.js/blob/master/examples/js/MarchingCubes.js
 /// </remarks>
-[RequireComponent(typeof(MeshFilter)), RequireComponent(typeof(MeshRenderer))]
 public class MarchingCuber : MonoBehaviour
 {
+    /// <summary>
+    /// Maximum number of vertices per mesh.
+    /// </summary>
+    private const int MaxVerticeCountPerMesh = 20000;
+
     /// <summary>
     /// The generator that provides the data for the marcher.
     /// </summary>
     public DistancefieldGenerator Voxelgenerator;
+
+    /// <summary>
+    /// Template for a chunk. Should have MeshFilter and MeshRenderer components.
+    /// </summary>
+    public GameObject ChunkTemplate;
 
     /// <summary>
     /// The scale of a single cube.
@@ -363,6 +372,9 @@ public class MarchingCuber : MonoBehaviour
 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
+    /// <summary>
+    /// Creates the mesh
+    /// </summary>
     void Start()
     {
         if (Voxelgenerator != null)
@@ -370,12 +382,18 @@ public class MarchingCuber : MonoBehaviour
     }
 
     /// <summary>
-    /// Generates the mesh
+    /// Generates the mesh. Is a coroutine and should be
+    /// called using the StartCoroutine-method only.
     /// </summary>
     public IEnumerator GenerateMesh()
     {
         if (Voxelgenerator == null)
             throw new InvalidOperationException("Voxelgenerator is null!");
+        if (ChunkTemplate == null)
+            throw new InvalidOperationException("ChunkTemplate is null!");
+
+        // Delete already existing chunks
+        ClearMeshes();
 
         List<Vector3> vertices = new List<Vector3>();
         List<Vector2> uv = new List<Vector2>();
@@ -551,26 +569,67 @@ public class MarchingCuber : MonoBehaviour
                         i += 3;
                     }
                 }
+
+                // If vertex count is getting too high: create chunk
+                if (vertexIndex > MaxVerticeCountPerMesh)
+                {
+                    CreateMesh(vertices, triangles, uv);
+                    vertexIndex = 0;
+                }
             }
 
             // Report back to coroutine caller
             yield return null;
         }
 
-        // Set mesh
-        MeshFilter meshFilter = GetComponent<MeshFilter>();
-        Mesh mesh = meshFilter.mesh;
-        if (mesh == null)
-            mesh = new Mesh();
-        else
-            mesh.Clear();
+        // If there are vertices available, create another mesh
+        if (vertexIndex > 0)
+            CreateMesh(vertices, triangles, uv);
+    }
 
+    /// <summary>
+    /// Creates a mesh with the specified vertices, triangles and uv. After
+    /// creating the mesh the provided lists are cleared. The mesh will be
+    /// added to a child.
+    /// </summary>
+    private void CreateMesh(List<Vector3> vertices, List<int> triangles, List<Vector2> uv)
+    {
+        Mesh mesh = new Mesh();
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles, 0);
         mesh.SetUVs(0, uv);
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
+        mesh.Optimize();
 
+        // Set MeshFilter
+        GameObject go = Instantiate(ChunkTemplate, transform, false) as GameObject;
+        MeshFilter meshFilter = go.GetComponent<MeshFilter>();
+        if(meshFilter == null)
+        {
+            go.AddComponent<MeshFilter>();
+            meshFilter = go.GetComponent<MeshFilter>();
+        }
         meshFilter.mesh = mesh;
+
+        // Set MeshCollider if wanted
+        MeshCollider meshCollider = go.GetComponent<MeshCollider>();
+        if(meshCollider != null)
+        {
+            meshCollider.sharedMesh = mesh;
+        }
+
+        vertices.Clear();
+        triangles.Clear();
+        uv.Clear();
+    }
+
+    /// <summary>
+    /// Destroys generated meshes.
+    /// </summary>
+    private void ClearMeshes()
+    {
+        foreach (Transform child in transform)
+            Destroy(child.gameObject);
     }
 }
