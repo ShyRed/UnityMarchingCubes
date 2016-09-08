@@ -1,41 +1,29 @@
 ﻿using UnityEngine;
-using System.Collections;
 
 /// <summary>
 /// Generates cave data for the <c>MarchingCuber</c>.
+/// Have a look at http://iquilezles.org/www/articles/distfunctions/distfunctions.htm
+/// for ideas.
 /// </summary>
-[RequireComponent(typeof (MarchingCuber))]
-public class CaveGenerator : MonoBehaviour {
+public class CaveGenerator : DistancefieldGenerator {
 
-    public int Seed = 0;
+    /// <summary>
+    /// Generates the value at the specified position.
+    /// </summary>
+    /// <param name="x">The x coordinate.</param>
+    /// <param name="y">The y coordinate.</param>
+    /// <param name="z">The z coordinate.</param>
+    /// <returns>The value at the specified position.</returns>
+    public override float GenerateValue(float x, float y, float z)
+    {
+        x %= 10;
+        z %= 10;
 
-    [Range(5, 25)]
-    public int Width = 10;
+        x -= 5;
+        z -= 5;
 
-    [Range(5, 25)]
-    public int Height = 10;
-
-    [Range(5, 25)]
-    public int Length = 10;
-
-    // Use this for initialization
-    void Start () {
-        int[,,] voxeldata = new int[Width, Height, Length];
-        for(int x = 0; x < Width; x++)
-        {
-            for(int y = 0; y < Height; y++)
-            {
-                for(int z = 0; z < Length; z++)
-                {
-                    float thresh = Mathf.PerlinNoise(x * 2 / (float)Width, y * 2 / (float)Height)
-                        + Mathf.PerlinNoise(-x * 3 / (float)Width, z * 3 / (float)Height);
-                    voxeldata[x, y, z] = thresh > 1f ? 1 : 0;
-                }
-            }
-        }
-
-        MarchingCuber cuber = GetComponent<MarchingCuber>();
-        cuber.Voxeldata = voxeldata;
-        cuber.GenerateMesh();
-	}
+        return y
+            * ((x * x + y * y + z * z) - 12)
+            * (y * 0.2f + (x * x + z * z) - 3);
+    }
 }

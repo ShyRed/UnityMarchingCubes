@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Collections;
 
 /// <summary>
 /// Represents a mesh that is build based on the voxeldata that is specified.
@@ -9,18 +10,56 @@ using System.Collections.Generic;
 /// Implementation based on http://stemkoski.github.io/Three.js/Marching-Cubes.html /
 /// https://github.com/stemkoski/three.js/blob/master/examples/js/MarchingCubes.js
 /// </remarks>
-[RequireComponent(typeof(MeshFilter))]
+[RequireComponent(typeof(MeshFilter)), RequireComponent(typeof(MeshRenderer))]
 public class MarchingCuber : MonoBehaviour
 {
     /// <summary>
-    /// The voxeldata. Every value other than 0 is regarded solid.
+    /// The generator that provides the data for the marcher.
     /// </summary>
-    public int[,,] Voxeldata;
+    public DistancefieldGenerator Voxelgenerator;
 
     /// <summary>
-    /// Scale
+    /// The scale of a single cube.
     /// </summary>
     public float Scale = 1f;
+
+    /// <summary>
+    /// Values lower than the isolevel are consiered solid.
+    /// </summary>
+    public float Isolevel = 0f;
+
+    /// <summary>
+    /// Start position on X axis.
+    /// </summary>
+    public int StartX = 0;
+
+    /// <summary>
+    /// Start position on Y axis.
+    /// </summary>
+    public int StartY = 0;
+
+    /// <summary>
+    /// Start position on Z axis.
+    /// </summary>
+    public int StartZ = 0;
+
+    /// <summary>
+    /// The width of the area that should be cube marched.
+    /// </summary>
+    [Range(3, 100)]
+    public int Width = 10;
+
+    /// <summary>
+    /// The height of the area that should be cube marched.
+    /// </summary>
+    [Range(3, 100)]
+    public int Height = 10;
+    
+    /// <summary>
+    /// The length of the area that should be cube marched.
+    /// </summary>
+    [Range(3, 100)]
+    public int Length = 10;
 
     /// <summary>
     ///This table is straight from Paul Bourke's page:
@@ -324,36 +363,41 @@ public class MarchingCuber : MonoBehaviour
 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
+    void Start()
+    {
+        if (Voxelgenerator != null)
+            StartCoroutine(GenerateMesh());
+    }
+
     /// <summary>
     /// Generates the mesh
     /// </summary>
-    public void GenerateMesh()
+    public IEnumerator GenerateMesh()
     {
-        if (Voxeldata == null)
-            throw new InvalidOperationException("Voxeldata is null!");
-
-        int xSize = Voxeldata.GetLength(0);
-        int ySize = Voxeldata.GetLength(1);
-        int zSize = Voxeldata.GetLength(2);
+        if (Voxelgenerator == null)
+            throw new InvalidOperationException("Voxelgenerator is null!");
 
         List<Vector3> vertices = new List<Vector3>();
         List<Vector2> uv = new List<Vector2>();
         List<int> triangles = new List<int>();
 
-        Vector3[] points = new Vector3[xSize * ySize * zSize];
-        int[] values = new int[xSize * ySize * zSize];
+        Vector3[] points = new Vector3[Width * Height * Length];
+        float[] values = new float[Width * Height * Length];
         int counter = 0;
-        for (int z = 0; z < zSize; z++)
+        for (int z = 0; z < Length; z++)
         {
-            for (int y = 0; y < ySize; y++)
+            for (int y = 0; y < Height; y++)
             {
-                for (int x = 0; x < xSize; x++)
+                for (int x = 0; x < Width; x++)
                 {
                     points[counter] = new Vector3(
-                        (x - xSize / 2f) * Scale,
-                        (y - ySize / 2f) * Scale,
-                        (z - zSize / 2f) * Scale);
-                    values[counter] = Voxeldata[x, y, z];
+                        (StartX + (x - Width / 2f)) * Scale,
+                        (StartY + (y - Height / 2f)) * Scale,
+                        (StartZ + (z - Length / 2f)) * Scale);
+                    values[counter] = Voxelgenerator.GenerateValue(
+                        StartX + x,
+                        StartY + y,
+                        StartZ + z);
                     counter++;
                 }
             }
@@ -366,24 +410,24 @@ public class MarchingCuber : MonoBehaviour
 
         int vertexIndex = 0;
 
-        for (int z = 0; z < zSize - 1; z++)
+        for (int z = 0; z < Length - 1; z++)
         {
-            for (int y = 0; y < ySize - 1; y++)
+            for (int y = 0; y < Height - 1; y++)
             {
-                for (int x = 0; x < xSize - 1; x++)
+                for (int x = 0; x < Width - 1; x++)
                 {
                     // index of base point, and also adjacent points on cube
-                    int p = x + xSize * y + xSize * ySize * z,
+                    int p = x + Width * y + Width * Height * z,
                         px = p + 1,
-                        py = p + xSize,
+                        py = p + Width,
                         pxy = py + 1,
-                        pz = p + xSize * ySize,
-                        pxz = px + xSize * ySize,
-                        pyz = py + xSize * ySize,
-                        pxyz = pxy + xSize * ySize;
+                        pz = p + Width * Height,
+                        pxz = px + Width * Height,
+                        pyz = py + Width * Height,
+                        pxyz = pxy + Width * Height;
 
                     // store scalar values corresponding to vertices
-                    int value0 = values[p],
+                    float value0 = values[p],
                         value1 = values[px],
                         value2 = values[py],
                         value3 = values[pxy],
@@ -393,14 +437,14 @@ public class MarchingCuber : MonoBehaviour
                         value7 = values[pxyz];
 
                     int cubeindex = 0;
-                    if (value0 != 0) cubeindex |= 1;
-                    if (value1 != 0) cubeindex |= 2;
-                    if (value2 != 0) cubeindex |= 8;
-                    if (value3 != 0) cubeindex |= 4;
-                    if (value4 != 0) cubeindex |= 16;
-                    if (value5 != 0) cubeindex |= 32;
-                    if (value6 != 0) cubeindex |= 128;
-                    if (value7 != 0) cubeindex |= 64;
+                    if (value0 < Isolevel) cubeindex |= 1;
+                    if (value1 < Isolevel) cubeindex |= 2;
+                    if (value2 < Isolevel) cubeindex |= 8;
+                    if (value3 < Isolevel) cubeindex |= 4;
+                    if (value4 < Isolevel) cubeindex |= 16;
+                    if (value5 < Isolevel) cubeindex |= 32;
+                    if (value6 < Isolevel) cubeindex |= 128;
+                    if (value7 < Isolevel) cubeindex |= 64;
 
                     // bits = 12 bit number, indicates which edges are crossed by the isosurface
                     int bits = EdgeTable[cubeindex];
@@ -408,33 +452,74 @@ public class MarchingCuber : MonoBehaviour
                     // if none are crossed, proceed to next iteration
                     if (bits == 0) continue;
 
+                    // check which edges are crossed, and estimate the point location
+                    //    using a weighted average of scalar values at edge endpoints.
+                    // store the vertex in an array for use later.
+                    float mu = 0.5f;
+
                     // bottom of the cube
                     if ((bits & 1) != 0)
-                        vlist[0] = points[p];
+                    {
+                        mu = (Isolevel - value0) / (value1 - value0);
+                        vlist[0] = Vector3.Lerp(points[p], points[px], mu);
+                    }
                     if ((bits & 2) != 0)
-                        vlist[1] = points[px];
+                    {
+                        mu = (Isolevel - value1) / (value3 - value1);
+                        vlist[1] = Vector3.Lerp(points[px], points[pxy], mu);
+                    }
                     if ((bits & 4) != 0)
-                        vlist[2] = points[py];
+                    {
+                        mu = (Isolevel - value2) / (value3 - value2);
+                        vlist[2] = Vector3.Lerp(points[py], points[pxy], mu);
+                    }
                     if ((bits & 8) != 0)
-                        vlist[3] = points[p];
+                    {
+                        mu = (Isolevel - value0) / (value2 - value0);
+                        vlist[3] = Vector3.Lerp(points[p], points[py], mu);
+                    }
                     // top of the cube
                     if ((bits & 16) != 0)
-                        vlist[4] = points[pz];
+                    {
+                        mu = (Isolevel - value4) / (value5 - value4);
+                        vlist[4] = Vector3.Lerp(points[pz], points[pxz], mu);
+                    }
                     if ((bits & 32) != 0)
-                        vlist[5] = points[pxz];
+                    {
+                        mu = (Isolevel - value5) / (value7 - value5);
+                        vlist[5] = Vector3.Lerp(points[pxz], points[pxyz], mu);
+                    }
                     if ((bits & 64) != 0)
-                        vlist[6] = points[pyz];
+                    {
+                        mu = (Isolevel - value6) / (value7 - value6);
+                        vlist[6] = Vector3.Lerp(points[pyz], points[pxyz], mu);
+                    }
                     if ((bits & 128) != 0)
-                        vlist[7] = points[pz];
+                    {
+                        mu = (Isolevel - value4) / (value6 - value4);
+                        vlist[7] = Vector3.Lerp(points[pz], points[pyz], mu);
+                    }
                     // vertical lines of the cube
                     if ((bits & 256) != 0)
-                        vlist[8] = points[p];
+                    {
+                        mu = (Isolevel - value0) / (value4 - value0);
+                        vlist[8] = Vector3.Lerp(points[p], points[pz], mu);
+                    }
                     if ((bits & 512) != 0)
-                        vlist[9] = points[px];
+                    {
+                        mu = (Isolevel - value1) / (value5 - value1);
+                        vlist[9] = Vector3.Lerp(points[px], points[pxz], mu);
+                    }
                     if ((bits & 1024) != 0)
-                        vlist[10] = points[pxy];
+                    {
+                        mu = (Isolevel - value3) / (value7 - value3);
+                        vlist[10] = Vector3.Lerp(points[pxy], points[pxyz], mu);
+                    }
                     if ((bits & 2048) != 0)
-                        vlist[11] = points[py];
+                    {
+                        mu = (Isolevel - value2) / (value6 - value2);
+                        vlist[11] = Vector3.Lerp(points[py], points[pyz], mu);
+                    }
 
                     // construct triangles -- get correct vertices from triTable.
                     int i = 0;
@@ -463,10 +548,13 @@ public class MarchingCuber : MonoBehaviour
                         uv.Add(new Vector2(1, 1));
 
                         vertexIndex += 3;
-                        i += 3; 
+                        i += 3;
                     }
                 }
             }
+
+            // Report back to coroutine caller
+            yield return null;
         }
 
         // Set mesh
@@ -482,10 +570,6 @@ public class MarchingCuber : MonoBehaviour
         mesh.SetUVs(0, uv);
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
-
-        Debug.Log("Vertices: " + mesh.vertices.Length);
-        Debug.Log("Triangles: " + mesh.triangles.Length);
-        Debug.Log("UV: " + mesh.uv.Length);
 
         meshFilter.mesh = mesh;
     }
