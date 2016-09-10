@@ -35,40 +35,43 @@ public class MarchingCuber : MonoBehaviour
     /// <summary>
     /// Values lower than the isolevel are considered solid.
     /// </summary>
-    public float Isolevel = 0f;
+    public float Isolevel = 0.1f;
 
     /// <summary>
     /// Start position on X axis.
     /// </summary>
-    public int StartX = 0;
+    public float StartX = 0;
 
     /// <summary>
     /// Start position on Y axis.
     /// </summary>
-    public int StartY = 0;
+    public float StartY = 0;
 
     /// <summary>
     /// Start position on Z axis.
     /// </summary>
-    public int StartZ = 0;
+    public float StartZ = 0;
 
     /// <summary>
     /// The width of the area that should be cube marched.
     /// </summary>
-    [Range(5, 200)]
-    public int Width = 10;
+    public float Width = 10;
 
     /// <summary>
     /// The height of the area that should be cube marched.
     /// </summary>
-    [Range(5, 200)]
-    public int Height = 10;
+    public float Height = 10;
     
     /// <summary>
     /// The length of the area that should be cube marched.
     /// </summary>
-    [Range(5, 200)]
-    public int Length = 10;
+    public float Length = 10;
+
+    /// <summary>
+    /// The size of the steps used to walk the distance field.
+    /// Smaller step size results in higher resolution geometry.
+    /// </summary>
+    public float StepSize = 1f;
 
     /// <summary>
     /// Starts the mesh generation at startup.
@@ -418,21 +421,60 @@ public class MarchingCuber : MonoBehaviour
 
         int vertexIndex = 0;
 
-        for (int z = StartZ; z < Length - 1 - StartZ; z++)
+        Vector3 pos = new Vector3();
+        for (float z = StartZ; z < Length - 1 - StartZ; z += StepSize)
         {
-            for (int y = StartY; y < Height - 1 - StartY; y++)
+            for (float y = StartY; y < Height - 1 - StartY; y += StepSize)
             {
-                for (int x = StartX; x < Width - 1 - StartX; x++)
+                for (float x = StartX; x < Width - 1 - StartX; x += StepSize)
                 {
                     // store scalar values corresponding to vertices
-                    float value0 = DistancefieldGenerator.GenerateValue(x, y, z), // p
-                        value1 = DistancefieldGenerator.GenerateValue(x + 1, y, z), // px
-                        value2 = DistancefieldGenerator.GenerateValue(x, y + 1, z), // py
-                        value3 = DistancefieldGenerator.GenerateValue(x + 1, y + 1, z), // pxy
-                        value4 = DistancefieldGenerator.GenerateValue(x, y, z + 1), // pz
-                        value5 = DistancefieldGenerator.GenerateValue(x + 1, y, z + 1), // pxz
-                        value6 = DistancefieldGenerator.GenerateValue(x, y + 1, z + 1), // pyz
-                        value7 = DistancefieldGenerator.GenerateValue(x + 1, y + 1, z + 1); // pxyz
+                    pos.x = x;
+                    pos.y = y;
+                    pos.z = z;
+                    float value0 = DistancefieldGenerator.GenerateValue(pos); // p
+
+                    // Skip, if distance to other objects is too large. Make sure
+                    // the object is further away than StepSize multiplied by 4
+                    // since we do a check where StepSize is added 3 times (pxyz)
+                    // that could touch an object.
+                    if (value0 > StepSize * 4)
+                        continue;
+
+                    pos.x = x + StepSize;
+                    pos.y = y;
+                    pos.z = z;
+                    float value1 = DistancefieldGenerator.GenerateValue(pos); // px
+
+                    pos.x = x;
+                    pos.y = y + StepSize;
+                    pos.z = z;
+                    float value2 = DistancefieldGenerator.GenerateValue(pos); // py
+
+                    pos.x = x + StepSize;
+                    pos.y = y + StepSize;
+                    pos.z = z;
+                    float value3 = DistancefieldGenerator.GenerateValue(pos); // pxy
+
+                    pos.x = x;
+                    pos.y = y;
+                    pos.z = z + StepSize;
+                    float value4 = DistancefieldGenerator.GenerateValue(pos); // pz
+
+                    pos.x = x + StepSize;
+                    pos.y = y;
+                    pos.z = z + StepSize;
+                    float value5 = DistancefieldGenerator.GenerateValue(pos); // pxz
+
+                    pos.x = x;
+                    pos.y = y + StepSize;
+                    pos.z = z + StepSize;
+                    float value6 = DistancefieldGenerator.GenerateValue(pos); // pyz
+
+                    pos.x = x + StepSize;
+                    pos.y = y + StepSize;
+                    pos.z = z + StepSize;
+                    float value7 = DistancefieldGenerator.GenerateValue(pos); // pxyz
 
                     int cubeindex = 0;
                     if (value0 < Isolevel) cubeindex |= 1;
@@ -448,7 +490,8 @@ public class MarchingCuber : MonoBehaviour
                     int bits = EdgeTable[cubeindex];
 
                     // if none are crossed, proceed to next iteration
-                    if (bits == 0) continue;
+                    if (bits == 0)
+                        continue;
 
                     // check which edges are crossed, and estimate the point location
                     //    using a weighted average of scalar values at edge endpoints.
@@ -461,57 +504,57 @@ public class MarchingCuber : MonoBehaviour
                         mu = (Isolevel - value0) / (value1 - value0);
                         vlist[0] = Vector3.Lerp(
                             GetVectorAtCube(x, y, z),
-                            GetVectorAtCube(x + 1, y, z), mu); // p, px
+                            GetVectorAtCube(x + StepSize, y, z), mu); // p, px
                     }
                     if ((bits & 2) != 0)
                     {
                         mu = (Isolevel - value1) / (value3 - value1);
                         vlist[1] = Vector3.Lerp(
-                            GetVectorAtCube(x + 1, y, z),
-                            GetVectorAtCube(x + 1, y + 1, z), mu); // px, pxy
+                            GetVectorAtCube(x + StepSize, y, z),
+                            GetVectorAtCube(x + StepSize, y + StepSize, z), mu); // px, pxy
                     }
                     if ((bits & 4) != 0)
                     {
                         mu = (Isolevel - value2) / (value3 - value2);
                         vlist[2] = Vector3.Lerp(
-                            GetVectorAtCube(x, y + 1, z),
-                            GetVectorAtCube(x + 1, y + 1, z), mu); // py, pxy
+                            GetVectorAtCube(x, y + StepSize, z),
+                            GetVectorAtCube(x + StepSize, y + StepSize, z), mu); // py, pxy
                     }
                     if ((bits & 8) != 0)
                     {
                         mu = (Isolevel - value0) / (value2 - value0);
                         vlist[3] = Vector3.Lerp(
                             GetVectorAtCube(x, y, z),
-                            GetVectorAtCube(x, y + 1, z), mu); // p, py
+                            GetVectorAtCube(x, y + StepSize, z), mu); // p, py
                     }
                     // top of the cube
                     if ((bits & 16) != 0)
                     {
                         mu = (Isolevel - value4) / (value5 - value4);
                         vlist[4] = Vector3.Lerp(
-                            GetVectorAtCube(x, y, z + 1),
-                            GetVectorAtCube(x + 1, y, z + 1), mu); // pz, pxz
+                            GetVectorAtCube(x, y, z + StepSize),
+                            GetVectorAtCube(x + StepSize, y, z + StepSize), mu); // pz, pxz
                     }
                     if ((bits & 32) != 0)
                     {
                         mu = (Isolevel - value5) / (value7 - value5);
                         vlist[5] = Vector3.Lerp(
-                            GetVectorAtCube(x + 1, y, z + 1),
-                            GetVectorAtCube(x + 1, y + 1, z + 1), mu); // pxz, pxyz
+                            GetVectorAtCube(x + StepSize, y, z + StepSize),
+                            GetVectorAtCube(x + StepSize, y + StepSize, z + StepSize), mu); // pxz, pxyz
                     }
                     if ((bits & 64) != 0)
                     {
                         mu = (Isolevel - value6) / (value7 - value6);
                         vlist[6] = Vector3.Lerp(
-                            GetVectorAtCube(x, y + 1, z + 1),
-                            GetVectorAtCube(x + 1, y + 1, z + 1), mu); // pyz, pxyz
+                            GetVectorAtCube(x, y + StepSize, z + StepSize),
+                            GetVectorAtCube(x + StepSize, y + StepSize, z + StepSize), mu); // pyz, pxyz
                     }
                     if ((bits & 128) != 0)
                     {
                         mu = (Isolevel - value4) / (value6 - value4);
                         vlist[7] = Vector3.Lerp(
-                            GetVectorAtCube(x, y, z + 1),
-                            GetVectorAtCube(x, y + 1, z + 1), mu); // pz, pyz
+                            GetVectorAtCube(x, y, z + StepSize),
+                            GetVectorAtCube(x, y + StepSize, z + StepSize), mu); // pz, pyz
                     }
                     // vertical lines of the cube
                     if ((bits & 256) != 0)
@@ -519,28 +562,28 @@ public class MarchingCuber : MonoBehaviour
                         mu = (Isolevel - value0) / (value4 - value0);
                         vlist[8] = Vector3.Lerp(
                             GetVectorAtCube(x, y, z),
-                            GetVectorAtCube(x, y, z + 1), mu); // p, pz
+                            GetVectorAtCube(x, y, z + StepSize), mu); // p, pz
                     }
                     if ((bits & 512) != 0)
                     {
                         mu = (Isolevel - value1) / (value5 - value1);
                         vlist[9] = Vector3.Lerp(
-                            GetVectorAtCube(x + 1, y, z),
-                            GetVectorAtCube(x + 1, y, z + 1), mu); // px, pxz
+                            GetVectorAtCube(x + StepSize, y, z),
+                            GetVectorAtCube(x + StepSize, y, z + StepSize), mu); // px, pxz
                     }
                     if ((bits & 1024) != 0)
                     {
                         mu = (Isolevel - value3) / (value7 - value3);
                         vlist[10] = Vector3.Lerp(
-                            GetVectorAtCube(x + 1, y + 1, z),
-                            GetVectorAtCube(x + 1, y + 1, z + 1), mu); // pxy, pxyz
+                            GetVectorAtCube(x + StepSize, y + StepSize, z),
+                            GetVectorAtCube(x + StepSize, y + StepSize, z + StepSize), mu); // pxy, pxyz
                     }
                     if ((bits & 2048) != 0)
                     {
                         mu = (Isolevel - value2) / (value6 - value2);
                         vlist[11] = Vector3.Lerp(
-                            GetVectorAtCube(x, y + 1, z),
-                            GetVectorAtCube(x, y + 1, z + 1), mu); // py, pyz
+                            GetVectorAtCube(x, y + StepSize, z),
+                            GetVectorAtCube(x, y + StepSize, z + StepSize), mu); // py, pyz
                     }
 
                     // construct triangles -- get correct vertices from triTable.
@@ -629,7 +672,7 @@ public class MarchingCuber : MonoBehaviour
     /// <param name="x">The x cube coordinate.</param>
     /// <param name="y">The y cube coordinate.</param>
     /// <param name="z">The z cube coordinate.</param>
-    private Vector3 GetVectorAtCube(int x, int y, int z)
+    private Vector3 GetVectorAtCube(float x, float y, float z)
     {
         return new Vector3(
             (StartX + (x - Width / 2f)) * Scale,
