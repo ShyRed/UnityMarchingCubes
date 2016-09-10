@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Collections;
 
 /// <summary>
-/// Represents a mesh that is build based on the voxeldata that is specified.
+/// Represents a mesh that is build based on the distancefield data that is specified.
 /// </summary>
 /// <remarks>
 /// Implementation based on http://stemkoski.github.io/Three.js/Marching-Cubes.html /
@@ -20,7 +20,7 @@ public class MarchingCuber : MonoBehaviour
     /// <summary>
     /// The generator that provides the data for the marcher.
     /// </summary>
-    public DistancefieldGenerator Voxelgenerator;
+    public DistancefieldGenerator DistancefieldGenerator;
 
     /// <summary>
     /// Template for a chunk. Should have MeshFilter and MeshRenderer components.
@@ -33,12 +33,7 @@ public class MarchingCuber : MonoBehaviour
     public float Scale = 1f;
 
     /// <summary>
-    /// Texture scale
-    /// </summary>
-    public float TextureScale = 1f;
-
-    /// <summary>
-    /// Values lower than the isolevel are consiered solid.
+    /// Values lower than the isolevel are considered solid.
     /// </summary>
     public float Isolevel = 0f;
 
@@ -60,20 +55,25 @@ public class MarchingCuber : MonoBehaviour
     /// <summary>
     /// The width of the area that should be cube marched.
     /// </summary>
-    [Range(3, 100)]
+    [Range(5, 200)]
     public int Width = 10;
 
     /// <summary>
     /// The height of the area that should be cube marched.
     /// </summary>
-    [Range(3, 100)]
+    [Range(5, 200)]
     public int Height = 10;
     
     /// <summary>
     /// The length of the area that should be cube marched.
     /// </summary>
-    [Range(3, 100)]
+    [Range(5, 200)]
     public int Length = 10;
+
+    /// <summary>
+    /// Starts the mesh generation at startup.
+    /// </summary>
+    public bool GenerateAtStartup = false;
 
     /// <summary>
     ///This table is straight from Paul Bourke's page:
@@ -382,8 +382,13 @@ public class MarchingCuber : MonoBehaviour
     /// </summary>
     void Start()
     {
-        if (Voxelgenerator != null)
-            StartCoroutine(GenerateMesh());
+        if (GenerateAtStartup)
+        {
+            if (DistancefieldGenerator != null)
+                StartCoroutine(GenerateMesh());
+            else
+                Debug.LogWarning("GenerateAtStartup set to true, but DistancefieldGenerator is null!");
+        }
     }
 
     /// <summary>
@@ -392,13 +397,13 @@ public class MarchingCuber : MonoBehaviour
     /// </summary>
     public IEnumerator GenerateMesh()
     {
-        if (Voxelgenerator == null)
-            throw new InvalidOperationException("Voxelgenerator is null!");
+        if (DistancefieldGenerator == null)
+            throw new InvalidOperationException("DistancefieldGenerator is null!");
         if (ChunkTemplate == null)
             throw new InvalidOperationException("ChunkTemplate is null!");
 
-        // Delete already existing chunks
-        ClearMeshes();
+        // Remember old chunks
+        IEnumerable<GameObject> oldChunks = GetCurrentChunks();
 
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
@@ -420,14 +425,14 @@ public class MarchingCuber : MonoBehaviour
                 for (int x = StartX; x < Width - 1 - StartX; x++)
                 {
                     // store scalar values corresponding to vertices
-                    float value0 = Voxelgenerator.GenerateValue(x, y, z), // p
-                        value1 = Voxelgenerator.GenerateValue(x + 1, y, z), // px
-                        value2 = Voxelgenerator.GenerateValue(x, y + 1, z), // py
-                        value3 = Voxelgenerator.GenerateValue(x + 1, y + 1, z), // pxy
-                        value4 = Voxelgenerator.GenerateValue(x, y, z + 1), // pz
-                        value5 = Voxelgenerator.GenerateValue(x + 1, y, z + 1), // pxz
-                        value6 = Voxelgenerator.GenerateValue(x, y + 1, z + 1), // pyz
-                        value7 = Voxelgenerator.GenerateValue(x + 1, y + 1, z + 1); // pxyz
+                    float value0 = DistancefieldGenerator.GenerateValue(x, y, z), // p
+                        value1 = DistancefieldGenerator.GenerateValue(x + 1, y, z), // px
+                        value2 = DistancefieldGenerator.GenerateValue(x, y + 1, z), // py
+                        value3 = DistancefieldGenerator.GenerateValue(x + 1, y + 1, z), // pxy
+                        value4 = DistancefieldGenerator.GenerateValue(x, y, z + 1), // pz
+                        value5 = DistancefieldGenerator.GenerateValue(x + 1, y, z + 1), // pxz
+                        value6 = DistancefieldGenerator.GenerateValue(x, y + 1, z + 1), // pyz
+                        value7 = DistancefieldGenerator.GenerateValue(x + 1, y + 1, z + 1); // pxyz
 
                     int cubeindex = 0;
                     if (value0 < Isolevel) cubeindex |= 1;
@@ -613,6 +618,9 @@ public class MarchingCuber : MonoBehaviour
             CreateMesh(vertices, triangles);
             verticeBuffer.Clear();
         }
+
+        // Destroy old chunks
+        DeleteChunks(oldChunks);
     }
 
     /// <summary>
@@ -667,11 +675,24 @@ public class MarchingCuber : MonoBehaviour
     }
 
     /// <summary>
-    /// Destroys generated meshes.
+    /// Returns all currently available chunks.
     /// </summary>
-    private void ClearMeshes()
+    /// <returns></returns>
+    private IEnumerable<GameObject> GetCurrentChunks()
     {
+        List<GameObject> chunks = new List<GameObject>();
         foreach (Transform child in transform)
-            Destroy(child.gameObject);
+            chunks.Add(child.gameObject);
+        return chunks;
+    }
+
+    /// <summary>
+    /// Destroys the specified chunks.
+    /// </summary>
+    /// <param name="chunks">The chunks to destroy.</param>
+    private void DeleteChunks(IEnumerable<GameObject> chunks)
+    {
+        foreach (GameObject chunk in chunks)
+            Destroy(chunk);
     }
 }
