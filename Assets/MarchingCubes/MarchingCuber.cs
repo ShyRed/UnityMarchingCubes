@@ -18,6 +18,15 @@ public class MarchingCuber : MonoBehaviour
     private const int MaxVerticeCountPerMesh = 20000;
 
     /// <summary>
+    /// Generation progress in percent from 0 to 1.0
+    /// </summary>
+    public float Progress
+    {
+        get;
+        private set;
+    }
+
+    /// <summary>
     /// The generator that provides the data for the marcher.
     /// </summary>
     public DistancefieldGenerator DistancefieldGenerator;
@@ -395,6 +404,17 @@ public class MarchingCuber : MonoBehaviour
     }
 
     /// <summary>
+    /// Validates user settings.
+    /// </summary>
+    void OnValidate()
+    {
+        StepSize = Mathf.Max(StepSize, 0.001f);
+        Width = Mathf.Max(Width, StepSize * 5);
+        Height = Mathf.Max(Height, StepSize * 5);
+        Length = Mathf.Max(Length, StepSize * 5);
+    }
+
+    /// <summary>
     /// Generates the mesh. Is a coroutine and should be
     /// called using the StartCoroutine-method only.
     /// </summary>
@@ -404,6 +424,9 @@ public class MarchingCuber : MonoBehaviour
             throw new InvalidOperationException("DistancefieldGenerator is null!");
         if (ChunkTemplate == null)
             throw new InvalidOperationException("ChunkTemplate is null!");
+
+        // Progress is 0
+        Progress = 0.0f;
 
         // Remember old chunks
         IEnumerable<GameObject> oldChunks = GetCurrentChunks();
@@ -651,9 +674,13 @@ public class MarchingCuber : MonoBehaviour
                 }
             }
 
-            // Report back to coroutine caller
+            // Set progress and Report back to coroutine caller
+            Progress = (z - StartZ) / Length;
             yield return null;
         }
+
+        // 100% progress
+        Progress = 1.0f;
 
         // If there are vertices available, create another mesh
         if (vertexIndex > 0)

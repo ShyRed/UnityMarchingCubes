@@ -192,7 +192,7 @@ public abstract class DistancefieldGenerator : MonoBehaviour {
     /// <returns>Union between distance field a and b.</returns>
     public static float Union(float a, float b)
     {
-        return Mathf.Min(a, b);
+        return a < b ? a : b;
     }
 
     /// <summary>
