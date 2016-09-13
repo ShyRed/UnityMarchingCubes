@@ -702,9 +702,9 @@ public class MarchingCuber : MonoBehaviour
     private Vector3 GetVectorAtCube(float x, float y, float z)
     {
         return new Vector3(
-            (StartX + (x - Width / 2f)) * Scale,
-            (StartY + (y - Height / 2f)) * Scale,
-            (StartZ + (z - Length / 2f)) * Scale);
+            (x - StartX - Width / 2f) * Scale,
+            (y - StartY - Height / 2f) * Scale,
+            (z - StartZ - Length / 2f) * Scale);
     }
 
     /// <summary>
